@@ -10,6 +10,11 @@ provide the `dal.DB` surface, and adds a SQL Server-native implementation of:
   from a table
 - `io.Closer`
 
+It opens the pool with `sql.OpenDB` over `NewConnector`, a wrapper of
+go-mssqldb's connector that sanitises every error the driver returns (see
+[Errors are sanitised](#errors-are-sanitised)). `NewConnector` is exported for
+callers that want a sanitised `*sql.DB` of their own.
+
 The driver is [`github.com/microsoft/go-mssqldb`](https://github.com/microsoft/go-mssqldb)
 (driver name `"sqlserver"`), pure Go: the package compiles with `CGO_ENABLED=0`.
 
@@ -36,6 +41,15 @@ def, err := db.DescribeCollection(ctx, &refs[0])   // columns, keys, indexes
 `NewDatabase` opens the server, pings it with `ctx` and resolves the schema to
 read; a failure at any of those steps closes the pool again.
 
+```go
+// A sanitised pool for native SQL.
+connector, err := dalgo2mssql.NewConnector(dsn)
+if err != nil {
+    return err
+}
+sqlDB := sql.OpenDB(connector)
+```
+
 ### Options
 
 | Option | Effect |
@@ -55,7 +69,7 @@ schema, whatever the `Database` was opened with.
 | `ListCollections` | User tables and views of the schema, by name. Objects SQL Server ships (`is_ms_shipped`) are left out. |
 | `ListViews` | The views of the schema, by name (each is also in `ListCollections`). |
 | `DescribeCollection` | Columns (portable type, length, precision, nullability, default expression, identity), the primary key in key order, the indexes and the foreign keys. |
-| `ListIndexes` | Indexes other than the primary key, key columns in key order; included columns are left out. The index behind a `UNIQUE` constraint is listed under the constraint's name, unique. |
+| `ListIndexes` | Indexes other than the primary key, key columns in key order; included columns are left out. The index behind a `UNIQUE` constraint is listed under the constraint's name, unique. Columnstore indexes are not listed: they have no key columns. |
 | `ListConstraints` | `PRIMARY KEY`, `UNIQUE`, `FOREIGN KEY` and `CHECK` constraints (types `primary-key`, `unique`, `foreign-key`, `check`), by name within type. |
 | `ListReferrers` | One entry per foreign key that references the table, from tables of the same schema, with the referencing columns in key order. |
 
@@ -65,7 +79,10 @@ Details:
   `0`, `(getdate())` is `getdate()`.
 - A primary-key column is never reported nullable.
 - A foreign key into another schema names it in `ReferencedNamespace`; one
-  disabled with `NOCHECK` is reported with `ForeignKeyEnforcementDisabled`.
+  disabled with `ALTER TABLE … NOCHECK CONSTRAINT` is reported with
+  `ForeignKeyEnforcementDisabled`. A key added `WITH NOCHECK` is enabled but
+  untrusted (existing rows were not checked, new writes are) and is reported
+  with `ForeignKeyEnforcementEnabled`.
   `OnUpdate` / `OnDelete` are `NO ACTION`, `CASCADE`, `SET NULL` or
   `SET DEFAULT`.
 - A missing table or view is an error that matches `ErrCollectionNotFound`.
@@ -85,24 +102,39 @@ Details:
 | `date`, `time`, `datetime`, `datetime2`, `smalldatetime`, `datetimeoffset` | `Time` | |
 | anything else (`text`, `ntext`, `xml`, `uniqueidentifier`, `sql_variant`, …) | `String` | |
 
-An alias type is mapped by its system type.
+An alias type, including `sysname` (`nvarchar(128)`), is mapped by its system
+type.
 
 ## Errors are sanitised
 
-No error of this package carries the DSN, the password, the user, the host or
-the database name, and none carries the driver's or the server's message text,
-which can hold them:
+No error of this package carries the DSN, the password, the user or the host.
+Every error the driver returns goes through one function at the
+`database/sql/driver` level, so the rule holds on every path: `NewDatabase`,
+the schema reader, and the query, key-read and transaction methods of the
+embedded `dalgo2sql` `dal.DB`, including a fetch that fails in the middle of a
+result set.
 
 - `*ConnectionError` — a failure to open (`KindOpen`), ping (`KindPing`) or
-  resolve the schema (`KindSchema`), or a connection lost during a later call
-  (`KindConnection`, with `Op` naming the call). Login errors the server
-  returns on a later call (18456 and the like) are connection errors too.
-- `*CatalogError` — a catalog query the server rejected (for example for lack
-  of `VIEW DEFINITION`); its text holds the call and the SQL Server error
-  number only.
+  resolve the schema (`KindSchema`), and on any later call (`KindConnection`,
+  with `Op` naming the step): a failed (re)connect, a lost connection, and a
+  login or database error the server returns (18456, 4060 and the like, whose
+  messages name the user or the database).
+- `*CatalogError` — a catalog query of the schema reader that the server
+  rejected (for example for lack of `VIEW DEFINITION`); its text holds the call
+  and the SQL Server error number only.
+- `*DriverError` — any other error of the driver (a malformed reply, …); its
+  text holds the step only.
+- `ErrReadOnlyTransaction` — see below.
+- An error the server returns for a statement the caller sent (a syntax error,
+  an unknown object, a permission refused) is go-mssqldb's `mssql.Error`,
+  unchanged, so the caller sees what was wrong with the statement. Its message
+  describes the statement and can name the objects it touches — a permission
+  error (229) names the database and schema of the object.
+- `driver.ErrBadConn` and the context errors are returned bare, so
+  `database/sql` still retries on a bad connection.
 
-Each has fixed text; the driver's error stays reachable through `Unwrap` for
-`errors.Is` and `errors.As`.
+The texts of the first three are fixed; the driver's error stays reachable
+through `Unwrap` for `errors.Is` and `errors.As`.
 
 ## Read-only access: use a read-only login
 
@@ -111,6 +143,10 @@ package does not pretend to have one: nothing here stops a statement sent
 through the embedded `dal.DB` from writing. For read-only use, connect as a
 login that can only read, for example a database user that is only a member of
 `db_datareader` and has `VIEW DEFINITION` for the schema scan:
+
+`RunReadonlyTransaction` (a transaction begun with
+`sql.TxOptions{ReadOnly: true}`) always fails with `ErrReadOnlyTransaction`;
+run reads outside a transaction instead.
 
 ```sql
 CREATE LOGIN reader WITH PASSWORD = '...';
@@ -133,6 +169,8 @@ GRANT VIEW DEFINITION ON SCHEMA::dbo TO reader;
   `sqlserver` driver does not accept; dalgo2sql has no `@p1` placeholder style
   yet.
 - No `ddl.Applier`: the package does not create or alter tables.
+- No bulk copy (`mssql.CopyIn`) through the package's pool: the wrapper refuses
+  the driver's bulk-copy statement.
 
 ## Running the tests
 

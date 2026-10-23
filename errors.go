@@ -77,6 +77,22 @@ func (e *CatalogError) Error() string {
 // Unwrap returns the driver's error.
 func (e *CatalogError) Unwrap() error { return e.cause }
 
+// DriverError reports an error of the SQL Server driver that is neither a
+// server's error for a statement nor a failure of the connection, for example
+// a malformed reply. Its text holds the call only: the driver's message can
+// name the server. The driver's error is reachable only through Unwrap.
+type DriverError struct {
+	Op    string
+	cause error
+}
+
+func (e *DriverError) Error() string {
+	return "dalgo2mssql: " + e.Op + ": the SQL Server driver failed"
+}
+
+// Unwrap returns the driver's error.
+func (e *DriverError) Unwrap() error { return e.cause }
+
 // ErrCollectionNotFound is matched (errors.Is) by the error a reader method
 // returns for a table or view that is not in the schema.
 var ErrCollectionNotFound = errors.New("collection not found")

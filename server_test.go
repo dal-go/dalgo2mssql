@@ -14,6 +14,7 @@ import (
 
 	"github.com/dal-go/dalgo/dal"
 	"github.com/dal-go/dalgo/dbschema"
+	mssql "github.com/microsoft/go-mssqldb"
 )
 
 // serverURLEnv names the admin URL of a real SQL Server
@@ -41,6 +42,7 @@ var serverSetup = []string{
 		order_no int NOT NULL,
 		note varchar(max) NULL,
 		alt_shop_id int NULL,
+		owner sysname NULL,
 		CONSTRAINT pk_orders PRIMARY KEY (order_no, shop_id),
 		CONSTRAINT fk_orders_shop FOREIGN KEY (shop_id) REFERENCES dbo.shops (id) ON DELETE CASCADE,
 		CONSTRAINT fk_orders_alt FOREIGN KEY (alt_shop_id) REFERENCES dbo.shops (id))`,
@@ -165,6 +167,11 @@ func TestServer(t *testing.T) {
 		if note := orders.Fields[2]; note.Name != "note" || note.Type != dbschema.String || note.Length != nil || !note.Nullable {
 			t.Errorf("note %+v", note)
 		}
+		// sysname is an alias of nvarchar(128) that SQL Server ships, not a
+		// user-defined type: it is mapped by its system type all the same.
+		if owner := orders.Fields[4]; owner.Name != "owner" || owner.Type != dbschema.String || owner.Length == nil || *owner.Length != 128 {
+			t.Errorf("owner %+v", owner)
+		}
 		byName := map[string]dbschema.ForeignKeyDef{}
 		for _, key := range orders.ForeignKeys {
 			byName[key.Name] = key
@@ -259,6 +266,29 @@ func TestServer(t *testing.T) {
 		}
 		if _, err = NewDatabase(ctx, dsn, WithSchema("nope")); !errors.Is(err, ErrSchemaNotFound) {
 			t.Errorf("nope: %v", err)
+		}
+	})
+
+	t.Run("QueryPath", func(t *testing.T) {
+		// A text query goes through the sanitising connector to the server.
+		reader, err := db.ExecuteQueryToRecordsReader(ctx, dal.NewTextQuery("SELECT name FROM dbo.v_shops", nil))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err = reader.Next(); !errors.Is(err, dal.ErrNoMoreRecords) {
+			t.Errorf("empty view: %v", err)
+		}
+		_ = reader.Close()
+		// A statement error is the server's own, with its number.
+		_, err = db.ExecuteQueryToRecordsReader(ctx, dal.NewTextQuery("SELECT * FROM dbo.nope", nil))
+		var serverErr mssql.Error
+		if !errors.As(err, &serverErr) || serverErr.Number != 208 {
+			t.Errorf("statement error: %v", err)
+		}
+		// SQL Server has no read-only transaction.
+		err = db.RunReadonlyTransaction(ctx, func(context.Context, dal.ReadTransaction) error { return nil })
+		if !errors.Is(err, ErrReadOnlyTransaction) {
+			t.Errorf("read-only transaction: %v", err)
 		}
 	})
 

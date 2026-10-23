@@ -3,6 +3,7 @@ package dalgo2mssql
 import (
 	"context"
 	"database/sql"
+	"database/sql/driver"
 	"errors"
 	"strings"
 	"testing"
@@ -30,25 +31,23 @@ func assertNoSecrets(t *testing.T, err error) {
 	}
 }
 
-// stubOpen makes sqlOpen return a sqlmock database that monitors pings.
+// stubOpen makes openDB return a sqlmock database that monitors pings, and
+// checks that NewDatabase hands it the sanitising connector.
 func stubOpen(t *testing.T) sqlmock.Sqlmock {
 	t.Helper()
 	db, mock, err := sqlmock.New(sqlmock.MonitorPingsOption(true), sqlmock.QueryMatcherOption(sqlmock.QueryMatcherEqual))
 	if err != nil {
 		t.Fatal(err)
 	}
-	orig := sqlOpen
-	sqlOpen = func(driverName, dsn string) (*sql.DB, error) {
-		if driverName != "sqlserver" {
-			t.Errorf("driver %q", driverName)
+	orig := openDB
+	openDB = func(c driver.Connector) *sql.DB {
+		if _, ok := c.(*connector); !ok {
+			t.Errorf("connector %T", c)
 		}
-		if dsn != secretDSN {
-			t.Errorf("dsn %q", dsn)
-		}
-		return db, nil
+		return db
 	}
 	t.Cleanup(func() {
-		sqlOpen = orig
+		openDB = orig
 		if err := mock.ExpectationsWereMet(); err != nil {
 			t.Error(err)
 		}
@@ -164,10 +163,15 @@ func TestNewDatabase_PingFails(t *testing.T) {
 }
 
 func TestNewDatabase_OpenFails(t *testing.T) {
-	orig := sqlOpen
-	t.Cleanup(func() { sqlOpen = orig })
+	orig := newMSSQLConnector
+	t.Cleanup(func() { newMSSQLConnector = orig })
 	openErr := errors.New("bad dsn " + secretDSN)
-	sqlOpen = func(string, string) (*sql.DB, error) { return nil, openErr }
+	newMSSQLConnector = func(dsn string) (driver.Connector, error) {
+		if dsn != secretDSN {
+			t.Errorf("dsn %q", dsn)
+		}
+		return nil, openErr
+	}
 	_, err := NewDatabase(context.Background(), secretDSN)
 	var connErr *ConnectionError
 	if !errors.As(err, &connErr) || connErr.Kind != KindOpen || !errors.Is(err, openErr) {

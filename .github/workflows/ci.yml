@@ -85,10 +85,12 @@ jobs:
         # green job here would not by itself prove TestServer ran — which is
         # exactly the vacuously-green outcome this job exists to prevent. Run
         # verbose and assert on the result lines. -count=1 keeps the test cache
-        # out: a cached package replays the PASS lines of an earlier run.
+        # out: a cached package replays the PASS lines of an earlier run. The
+        # coverage gate is strongo_workflow's alone: the unit tests cover every
+        # statement without a server.
         run: |
           set -o pipefail
-          go test -race -v -count=1 -covermode=atomic -coverprofile=cover.out ./... 2>&1 | tee /tmp/gotest.log
+          go test -v -count=1 ./... 2>&1 | tee /tmp/gotest.log
           if grep -qE '^\s*--- SKIP: ' /tmp/gotest.log; then
             echo "::error::a test SKIPPED - the server URL did not reach the tests"
             exit 1
@@ -104,12 +106,12 @@ jobs:
             TestServer/ListConstraints \
             TestServer/ListReferrers \
             TestServer/WithSchema \
+            TestServer/QueryPath \
             TestServer/bad_password_leaks_nothing; do
             if ! grep -qE "^\s*--- PASS: ${name} \(" /tmp/gotest.log; then
               echo "::error::${name} did not run to a pass"
               exit 1
             fi
           done
-          awk 'NR > 1 && $3 == 0 { uncovered += $2; print } END { if (uncovered > 0) { print "::error::" uncovered " uncovered statements"; exit 1 } }' cover.out
         env:
           DALGO2MSSQL_TEST_URL: sqlserver://sa:Dalgo2mssql-Test1@127.0.0.1:1433?database=master&TrustServerCertificate=true

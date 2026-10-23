@@ -22,7 +22,7 @@ const lookupObjectSQL = `SELECT o.object_id FROM sys.objects o
 WHERE o.schema_id = SCHEMA_ID(@p1) AND o.name = @p2 AND o.type IN ('U', 'V') AND o.is_ms_shipped = 0`
 
 const columnsSQL = `SELECT c.name,
-	CASE WHEN ty.is_user_defined = 1 AND ty.is_assembly_type = 0 THEN TYPE_NAME(c.system_type_id) ELSE ty.name END,
+	CASE WHEN ty.user_type_id <> ty.system_type_id AND ty.is_assembly_type = 0 THEN TYPE_NAME(c.system_type_id) ELSE ty.name END,
 	c.max_length, c.precision, c.scale, c.is_nullable, c.is_identity, dc.definition
 FROM sys.columns c
 JOIN sys.types ty ON ty.user_type_id = c.user_type_id

@@ -10,11 +10,11 @@ import (
 	"github.com/dal-go/dalgo/dal"
 	"github.com/dal-go/dalgo/dbschema"
 	"github.com/dal-go/dalgo2sql"
-
-	_ "github.com/microsoft/go-mssqldb" // registers the "sqlserver" driver
 )
 
-// DriverName is the database/sql driver name the package opens.
+// DriverName is the database/sql driver name go-mssqldb registers. The
+// package itself opens the pool with sql.OpenDB over NewConnector, so that
+// every error of the driver is sanitised.
 const DriverName = "sqlserver"
 
 // StructuredQueryDialect is the dalgo2sql structured-query dialect the
@@ -24,8 +24,8 @@ const StructuredQueryDialect = "sqlserver"
 // Version is the dalgo2mssql adapter version, reported by Adapter.
 const Version = "0.1.0"
 
-// sqlOpen is the test seam for sql.Open.
-var sqlOpen = sql.Open
+// openDB is the test seam for sql.OpenDB.
+var openDB = sql.OpenDB
 
 var (
 	_ dal.DB                = (*Database)(nil)
@@ -85,10 +85,11 @@ func NewDatabase(ctx context.Context, dsn string, opts ...Option) (*Database, er
 	}
 	o.dbOptions.StructuredQueryDialect = StructuredQueryDialect
 
-	sqlDB, err := sqlOpen(DriverName, dsn)
+	c, err := NewConnector(dsn)
 	if err != nil {
-		return nil, &ConnectionError{Kind: KindOpen, cause: err}
+		return nil, err
 	}
+	sqlDB := openDB(c)
 	if err = sqlDB.PingContext(ctx); err != nil {
 		_ = sqlDB.Close()
 		return nil, &ConnectionError{Kind: KindPing, cause: err}

@@ -20,10 +20,11 @@
 //
 // SQL Server has no read-only session and no read-only transaction, and this
 // package does not pretend to have one: nothing here stops a statement sent
-// through the embedded dal.DB from writing. Safety comes from two things
-// outside this package: the caller sends only SELECT text, and the login in the
-// DSN should be a read-only one (for example a user that is only a member of
-// db_datareader and has VIEW DEFINITION for the schema scan).
+// through the embedded dal.DB from writing, and a transaction begun read-only
+// (RunReadonlyTransaction) fails with [ErrReadOnlyTransaction]. Safety comes
+// from outside this package: the caller sends only SELECT text, and the login
+// in the DSN should be a read-only one (for example a user that is only a
+// member of db_datareader and has VIEW DEFINITION for the schema scan).
 //
 // The key read/write surface of the embedded dal.DB (Get, Set, Insert, Delete)
 // writes "?" parameter markers, which the "sqlserver" driver does not accept;
@@ -34,11 +35,16 @@
 //
 // # Errors
 //
-// No error of this package carries the DSN, the password, the user, the host or
-// the database name, and none carries the driver's or the server's message
-// text, which can hold them. A failure to open, ping or resolve the schema is a
-// [*ConnectionError]; a catalog query the server rejects is a [*CatalogError]
-// with the server's error number; a connection lost during a later call is a
-// [*ConnectionError] of kind [KindConnection]. Each has fixed text, and the
-// driver error stays reachable through Unwrap for errors.Is and errors.As.
+// No error of this package carries the DSN, the password, the user or the
+// host. The pool is opened over [NewConnector], which sends every error of the
+// driver through one function, so this holds for the query, read and
+// transaction methods of the embedded dal.DB too. A failure to open, ping or
+// resolve the schema is a [*ConnectionError]; so is a failed reconnect, a lost
+// connection or a login or database error on a later call. A catalog query the
+// server rejects is a [*CatalogError] with the server's error number; another
+// error of the driver is a [*DriverError]. Each has fixed text, and the
+// driver's error stays reachable through Unwrap for errors.Is and errors.As.
+// An error the server returns for a statement the caller sent is go-mssqldb's
+// mssql.Error, unchanged: its message describes the statement and can name
+// its objects, including their database.
 package dalgo2mssql
