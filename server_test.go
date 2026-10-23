@@ -73,7 +73,10 @@ func TestServer(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer func() { _ = admin.Close() }()
+	// A cleanup, not a defer: cleanups run after the test function returns
+	// and in reverse order, so the pool is still open when the cleanup below
+	// drops the database.
+	t.Cleanup(func() { _ = admin.Close() })
 	dbName := fmt.Sprintf("dalgo2mssql_%d", time.Now().UnixNano())
 	if _, err = admin.ExecContext(ctx, "CREATE DATABASE ["+dbName+"]"); err != nil {
 		t.Fatalf("create database: %v", err)
