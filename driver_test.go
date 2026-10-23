@@ -334,6 +334,7 @@ func TestSanitize(t *testing.T) {
 		{"server error wrapping a statement", mssql.ServerError{}, func(e error) bool { return errors.As(e, new(mssql.ServerError)) }}, //nolint:errorlint // unchanged
 		{"login", errLogin, isConn},
 		{"login in the chain", errLoginChain, isConn},
+		{"no access to another database", mssql.Error{Number: 916, Message: `The server principal "reader_login" is not able to access the database "shopdb" under the current security context.`}, isConn},
 		{"dial", errDial, isConn},
 		{"errno", syscall.ECONNRESET, isConn},
 		{"eof", io.ErrUnexpectedEOF, isConn},

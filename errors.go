@@ -109,6 +109,7 @@ func newCollectionNotFoundError(schema, name string) error {
 // connection, whose messages name the user or the database: they are reported
 // as connection failures.
 var loginErrors = map[int32]bool{
+	916:   true, // the server principal cannot access the database (names both)
 	4060:  true, // cannot open database requested by the login
 	4064:  true, // cannot open user default database
 	18452: true, // login from an untrusted domain

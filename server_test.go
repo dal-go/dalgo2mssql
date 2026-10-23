@@ -285,6 +285,51 @@ func TestServer(t *testing.T) {
 		if !errors.As(err, &serverErr) || serverErr.Number != 208 {
 			t.Errorf("statement error: %v", err)
 		}
+		// A login with no user in another database: the server's refusal (916)
+		// names the login and the database, so it is a ConnectionError.
+		otherDB := dbName + "_other"
+		if _, err = admin.ExecContext(ctx, "CREATE DATABASE ["+otherDB+"]"); err != nil {
+			t.Fatalf("create other database: %v", err)
+		}
+		t.Cleanup(func() {
+			_, _ = admin.ExecContext(context.Background(), "ALTER DATABASE ["+otherDB+"] SET SINGLE_USER WITH ROLLBACK IMMEDIATE; DROP DATABASE ["+otherDB+"]")
+		})
+		other, err := sql.Open(DriverName, withDatabase(t, adminURL, otherDB))
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, err = other.ExecContext(ctx, "CREATE TABLE dbo.t (id int)")
+		_ = other.Close()
+		if err != nil {
+			t.Fatalf("create table: %v", err)
+		}
+		login := "probe_" + dbName
+		const probePassword = "Pr0be-Passw0rd-Secret"
+		if _, err = admin.ExecContext(ctx, "CREATE LOGIN ["+login+"] WITH PASSWORD = '"+probePassword+"'"); err != nil {
+			t.Fatalf("create login: %v", err)
+		}
+		t.Cleanup(func() { _, _ = admin.ExecContext(context.Background(), "DROP LOGIN ["+login+"]") })
+		if _, err = db.sqlDB.ExecContext(ctx, "CREATE USER ["+login+"] FOR LOGIN ["+login+"]"); err != nil {
+			t.Fatalf("create user: %v", err)
+		}
+		u, _ := url.Parse(dsn)
+		u.User = url.UserPassword(login, probePassword)
+		probe, err := NewDatabase(ctx, u.String())
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, err = probe.ExecuteQueryToRecordsReader(ctx, dal.NewTextQuery("SELECT id FROM ["+otherDB+"].dbo.t", nil))
+		_ = probe.Close()
+		var connErr *ConnectionError
+		if !errors.As(err, &connErr) || connErr.Kind != KindConnection || !errors.As(err, &serverErr) || serverErr.Number != 916 {
+			t.Fatalf("no access to another database: %v", err)
+		}
+		for _, part := range []string{login, otherDB, probePassword} {
+			if strings.Contains(err.Error(), part) {
+				t.Errorf("error %q contains %q", err.Error(), part)
+			}
+		}
+
 		// SQL Server has no read-only transaction.
 		err = db.RunReadonlyTransaction(ctx, func(context.Context, dal.ReadTransaction) error { return nil })
 		if !errors.Is(err, ErrReadOnlyTransaction) {
