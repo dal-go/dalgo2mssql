@@ -59,7 +59,7 @@ jobs:
         # is licensed for development and testing, never production. The image
         # is pulled and thrown away with the runner; it is never redistributed,
         # republished or copied into a release.
-        image: mcr.microsoft.com/mssql/server:2022-latest@sha256:cf8f0ab2ebe61feec2eed2629061a07d247f791c2a8ddda74a4ac9f06a291718
+        image: mcr.microsoft.com/mssql/server:2025-latest@sha256:245f6b1c8903edae52cb20fa31419cefcde1a49938bb8c3447099011fc871ca3
         env:
           ACCEPT_EULA: 'Y'
           # A throwaway password of a server that lives as long as the job and
