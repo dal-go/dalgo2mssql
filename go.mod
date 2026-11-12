@@ -2,12 +2,12 @@ module github.com/dal-go/dalgo2mssql
 
 go 1.26.0
 
-toolchain go1.27.3
+toolchain go1.27.4
 
 require (
 	github.com/DATA-DOG/go-sqlmock v1.5.2
-	github.com/dal-go/dalgo v0.99.0
-	github.com/dal-go/dalgo2sql v0.32.2
+	github.com/dal-go/dalgo v0.102.2
+	github.com/dal-go/dalgo2sql v0.32.3
 	github.com/dal-go/record v0.1.5
 	github.com/microsoft/go-mssqldb v1.11.2
 )
@@ -30,8 +30,8 @@ require (
 	golang.org/x/sys v0.49.0 // indirect
 	golang.org/x/text v0.41.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
-	modernc.org/libc v1.79.0 // indirect
+	modernc.org/libc v1.80.1 // indirect
 	modernc.org/mathutil v1.7.1 // indirect
 	modernc.org/memory v1.12.1 // indirect
-	modernc.org/sqlite v1.61.1 // indirect
+	modernc.org/sqlite v1.62.0 // indirect
 )
