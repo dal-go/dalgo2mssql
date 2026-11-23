@@ -9,7 +9,7 @@ require (
 	github.com/dal-go/dalgo v0.102.4
 	github.com/dal-go/dalgo2sql v0.32.5
 	github.com/dal-go/record v0.1.5
-	github.com/microsoft/go-mssqldb v1.11.2
+	github.com/microsoft/go-mssqldb v1.12.0
 )
 
 require (
