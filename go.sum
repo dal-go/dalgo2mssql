@@ -75,6 +75,8 @@ github.com/mattn/go-isatty v0.0.24 h1:tGZZoVgT/KiqK1c8ocVLeDS8BSWMRd47J3Lbz7vsRe
 github.com/mattn/go-isatty v0.0.24/go.mod h1:nMCL3Zebbrt45jsMDgnfIwz6ydEQApk5oEI3HqDio6A=
 github.com/microsoft/go-mssqldb v1.11.2 h1:FCgeBIK8um2+X4tbun6Q71N1KsfyCDPKY41e1yGVjSE=
 github.com/microsoft/go-mssqldb v1.11.2/go.mod h1:CYgwG5AMXFojbjTg+GNP5G/y6uz1BhTyZaPqQWzkGnQ=
+github.com/microsoft/go-mssqldb v1.12.0 h1:Jwg/8jz2MKlFOYf4Oj7wMOQuTpCLrP4PIx0aINasMfw=
+github.com/microsoft/go-mssqldb v1.12.0/go.mod h1:iYsISdcqI4Tf8x/JwwkHfBu5pxtSD6lSJB8tCrOoo6E=
 github.com/mschoch/smat v0.2.0 h1:8imxQsjDm8yFEAVBe7azKmKSgzSkZXDuKkSq9374khM=
 github.com/mschoch/smat v0.2.0/go.mod h1:kc9mz7DoBKqDyiRL7VZN8KvXQMWeTaVnttLRXOlotKw=
 github.com/ncruces/go-strftime v1.1.0 h1:vtPmPWMkb539RGV9WpWT9EwJGvrOCKvMNI4obWL47Hk=
